@@ -1,0 +1,27 @@
+{
+  "name": "simple-server",
+  "version": "2.0.0",
+  "description": "my own server, do what I think is reasonable.",
+  "main": "index.js",
+  "directories": {
+    "doc": "doc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@bitbucket.org/shasharoman/simple-server.git"
+  },
+  "keywords": [
+    "server",
+    "shasharoman"
+  ],
+  "author": "shasharoman@gmail.com",
+  "license": "MIT",
+  "homepage": "https://bitbucket.org/shasharoman/simple-server#readme",
+  "dependencies": {
+    "bluebird": "3.5.1",
+    "lodash": "4.17.10",
+    "request": "2.85.0",
+    "request-promise": "4.2.2",
+    "treeify": "1.0.1"
+  }
+}

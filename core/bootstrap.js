@@ -6,7 +6,7 @@ const config = require('../config');
 const logger = require(process.env.lib).logger;
 const util = require('../util');
 
-exports = module.exports = function () {
+exports = module.exports = async function () {
     const appOptions = _.pick(config, [
         'host',
         'port',
@@ -47,20 +47,17 @@ exports = module.exports = function () {
         server.registerRpc();
     }
 
-    return server.application.setup().then(function (router) {
-        server.appendRouter(router);
-        server.listen(appOptions.port, appOptions.host);
+    let router = await server.application.setup();
 
-        logger.debug('bootstrap end');
+    server.appendRouter(router);
+    server.listen(appOptions.port, appOptions.host);
 
-        logger.info('server listen on', appOptions.port);
-        logger.info(server.toString());
+    logger.debug('bootstrap end');
+    logger.info('server listen on', appOptions.port);
+    logger.info(server.toString());
 
-        return Promise.resolve(server);
-    });
+    return server;
 };
-
-
 
 function _trimComponent(origin, appComponent) {
     return _.mapValues(origin, (items, type) => {

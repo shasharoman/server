@@ -115,51 +115,53 @@ exports = module.exports = class TreeNode {
         return this._add('interferer', type, interferer);
     }
 
-    convert(type, ctx) {
+    async convert(type, ctx) {
         let converters = this.endpoint().converter[type] || [];
 
         if (_.isEmpty(converters)) {
-            return Promise.resolve(ctx);
+            return ctx;
         }
 
-        return Promise.mapSeries(converters, item => {
-            return item.apply(ctx, [ctx]);
-        }).then(() => {});
+        await Promise.mapSeries(converters, async item => {
+            return await item.apply(ctx, [ctx]);
+        });
+
+        return {};
     }
 
-    redirect(type, ctx) {
+    async redirect(type, ctx) {
         let redirectors = this.endpoint().redirector[type] || [];
 
         if (_.isEmpty(redirectors)) {
-            return Promise.resolve();
+            return;
         }
 
-        return Promise.map(redirectors, item => {
-            return item.apply(ctx, [ctx]);
-        }).then(results => {
-            return Promise.resolve(_.first(_.filter(results, item => !_.isEmpty(item))));
+        let rets = await Promise.map(redirectors, async item => {
+            return await item.apply(ctx, [ctx]);
         });
+
+        return _.first(_.filter(rets, item => !_.isEmpty(item)));
     }
 
-    intercept(type, ctx) {
+    async intercept(type, ctx) {
         let interceptors = this.endpoint().interceptor[type] || [];
 
         if (_.isEmpty(interceptors)) {
-            return Promise.resolve();
+            return;
         }
 
-        return Promise.map(interceptors, item => {
-            return item.apply(ctx, [ctx]);
-        }).then(results => {
-            return Promise.resolve(_.find(results, item => !_.isUndefined(item)));
+        let rets = await Promise.map(interceptors, async item => {
+            return await item.apply(ctx, [ctx]);
         });
+
+        return _.find(rets, item => !_.isUndefined(item));
     }
 
-    interfere(type, ctx) {
+    async interfere(type, ctx) {
         let interferer = this.endpoint().interferer[type] || [];
 
         if (_.isEmpty(interferer)) {
-            return Promise.resolve();
+            return;
         }
 
         return Promise.mapSeries(interferer, item => {
@@ -167,58 +169,42 @@ exports = module.exports = class TreeNode {
         });
     }
 
-    process(type, ctx) {
+    async process(type, ctx) {
         ctx.pass(this);
 
-        return this.convert(type, ctx).then(() => {
-            logger.debug(this.name, 'convert success');
-            return this.redirect(type, ctx);
-        }).then(ret => {
-            logger.debug(this.name, 'redirect result', ret);
+        await this.convert(type, ctx);
+        logger.debug(this.name, 'convert success');
 
-            if (!_.isEmpty(ret)) {
-                ret = _.isString(ret) ? {
-                    path: ret
-                } : ret;
+        let ret = await this.redirect(type, ctx);
+        logger.debug(this.name, 'redirect result', ret);
 
-                return Promise.reject({
-                    isBreak: true,
-                    result: {
-                        type: 'redirect',
-                        path: ret.path,
-                        skip: ret.skip || nPath.dirname(ret.path)
-                    }
-                });
-            }
+        if (!_.isEmpty(ret)) {
+            ret = _.isString(ret) ? {
+                path: ret
+            } : ret;
 
-            return this.intercept(type, ctx);
-        }).then(reason => {
-            logger.debug(this.name, 'intercept result', reason);
+            return {
+                type: 'redirect',
+                path: ret.path,
+                skip: ret.skip || nPath.dirname(ret.path)
+            };
+        }
 
-            if (reason) {
-                return Promise.reject({
-                    isBreak: true,
-                    result: {
-                        type: 'intercept',
-                        reason: reason
-                    }
-                });
-            }
+        let reason = await this.intercept(type, ctx);
+        logger.debug(this.name, 'intercept result', reason);
+        if (reason) {
+            return {
+                type: 'intercept',
+                reason: reason
+            };
+        }
 
-            return this.interfere(type, ctx).then(() => {
-                logger.debug(this.name, 'interfere success');
+        await this.interfere(type, ctx);
+        logger.debug(this.name, 'interfere success');
 
-                return Promise.resolve({
-                    type: 'continue'
-                });
-            });
-        }).catch(err => {
-            if (err && err.isBreak) {
-                return Promise.resolve(err.result);
-            }
-
-            return Promise.reject(err);
-        });
+        return {
+            type: 'continue'
+        };
     }
 
     pathWithRoot(root) {

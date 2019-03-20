@@ -45,30 +45,31 @@ exports = module.exports = class Server extends Router {
             return null;
         }, ['POST']);
 
-        this.post(path, function (ctx) {
+        this.post(path, async(ctx) => {
             let module = ctx.params.module[0];
             let service = ctx.params.service[0];
 
             if (!module || !service) {
-                return Promise.reject('module and service is required.');
+                throw new Error('module and service is required.');
             }
 
             let timestamp = ctx.headers['x-timestamp'];
             let sign = ctx.headers['x-sign'];
 
-            return rpc.receive(module, service, ctx.body, timestamp, sign).then(result => {
-                if (Buffer.isBuffer(result)) {
-                    ctx.setHeader('content-type', 'application/octet-stream');
-                    return ctx.end(result);
-                }
+            let ret = await rpc.receive(module, service, ctx.body, timestamp, sign);
 
-                ctx.setHeader('content-type', 'application/json');
-                return Promise.resolve([200, 'OK', JSON.stringify({
-                    code: 0,
-                    msg: 'ok',
-                    result: _.isUndefined(result) ? {} : result
-                })]);
-            });
+            if (Buffer.isBuffer(ret)) {
+                ctx.setHeader('content-type', 'application/octet-stream');
+                return await ctx.end(ret);
+            }
+
+            ctx.setHeader('content-type', 'application/json');
+
+            return [200, 'OK', JSON.stringify({
+                code: 0,
+                msg: 'ok',
+                result: _.isUndefined(ret) ? {} : ret
+            })];
         });
 
         return this;

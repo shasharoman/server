@@ -9,40 +9,43 @@ exports = module.exports = class AppModule {
         this.services = this.manifest.services || [];
     }
 
-    setup() {
+    async setup() {
         this.router = new Router();
 
         logger.debug(this.name, 'setup start');
         logger.debug('init start');
 
-        return this.manifest.init().then(() => {
-            logger.debug('init end');
+        await this.manifest.init();
 
-            logger.debug('routes register start');
-            this._register(this.router, this.manifest);
-            logger.debug('routes register end');
+        logger.debug('init end');
 
-            logger.debug(this.name, 'setup end');
-            return Promise.resolve(this.router);
-        });
+        logger.debug('routes register start');
+        this._register(this.router, this.manifest);
+        logger.debug('routes register end');
+
+        logger.debug(this.name, 'setup end');
+        return this.router;
     }
 
     links() {
         return this.manifest.links;
     }
 
-    serviceCall(serviceName) {
+    async serviceCall(serviceName) {
         let service = _.find(this.services, item => item.name === serviceName);
         if (_.isEmpty(service)) {
-            return Promise.reject(new Error('service call, ' + [this.name, serviceName].join('.') + ' not exists'));
+            throw new Error('service call, ' + [this.name, serviceName].join('.') + ' not exists');
         }
 
-        return service.impl.apply(null, _.slice(Array.prototype.slice.call(arguments), 1)).catch(err => {
+        try {
+            return await service.impl.apply(null, _.slice(Array.prototype.slice.call(arguments), 1));
+        }
+        catch (err) {
             logger.error(`${this.name}-${serviceName} service call error`);
             logger.error(err);
 
-            return Promise.reject(err);
-        });
+            throw err;
+        }
     }
 
     _register(router, manifest) {

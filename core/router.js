@@ -153,99 +153,115 @@ exports = module.exports = class Router {
     }
 
     // process request
-    process(ctx, skip) {
-        return ctx.start().then(() => {
-            logger.debug('router process start.');
+    async process(ctx, skip) {
+        await ctx.start();
 
-            let path = ctx.pathname;
-            let method = ctx.method;
+        let [
+            statusCode,
+            statusMessage,
+            body,
+            contentType
+        ] = this._trim(await this._process(ctx, skip));
 
-            if (!this.pathTree.searchEnd(path)) {
-                path = path + (_.endsWith(path, '/') ? 'index' : '/index');
-            }
-            // handle 404 
-            if (!this.pathTree.searchEnd(path)) {
-                let match = path.match(/^\/([^/]+).*$/);
-                let app = match ? match[1] : 'common';
-                let notFoundPath = `/${app}/404`;
+        if (ctx.finished) {
+            return;
+        }
+        if (contentType) {
+            ctx.setHeader('content-type', contentType);
+        }
+        ctx.statusCode = statusCode;
+        ctx.statusMessage = statusMessage;
 
-                if (this.pathTree.searchEnd(notFoundPath)) {
-                    ctx.setUrl(notFoundPath);
-                    return this.process(ctx);
-                }
+        return await ctx.end(body);
+    }
 
-                if (app !== 'common' && this.pathTree.searchEnd('/common/404')) {
-                    ctx.setUrl('/common/404');
-                    return this.process(ctx);
-                }
+    async _process(ctx, skip) {
+        logger.debug('router process start.');
 
-                return Promise.resolve(404);
-            }
+        let path = ctx.pathname;
+        let method = ctx.method;
 
-            return this.pathTree.process(path, method, ctx, skip).then(ret => {
-                /* eslint-disable */
-                switch (ret.type) {
-                    case 'redirect':
-                        ctx.setUrl(ret.path);
-                        return this.process(ctx, ret.skip);
-                    case 'intercept':
-                        return Promise.reject(ret.reason)
+        if (!this.pathTree.searchEnd(path)) {
+            path = path + (_.endsWith(path, '/') ? 'index' : '/index');
+        }
+        // handle 404 
+        if (!this.pathTree.searchEnd(path)) {
+            let match = path.match(/^\/([^/]+).*$/);
+            let app = match ? match[1] : 'common';
+            let notFoundPath = `/${app}/404`;
 
-                    case 'done':
-                        return Promise.resolve(ret.result);
-
-                    default:
-                        return Promise.resolve(404);
-                }
-                /* eslint-enable */
-            });
-        }).then(result => {
-            if (ctx.finished) {
-                return Promise.resolve();
+            if (this.pathTree.searchEnd(notFoundPath)) {
+                ctx.setUrl(notFoundPath);
+                return await this.process(ctx);
             }
 
-            if (_.isNumber(result)) {
-                ctx.setHeader('content-type', 'text/plain');
-                result = [result, http.STATUS_CODES[result], http.STATUS_CODES[result]];
+            if (app !== 'common' && this.pathTree.searchEnd('/common/404')) {
+                ctx.setUrl('/common/404');
+                return await this.process(ctx);
             }
 
-            if (_.isEmpty(result) || _.isString(result)) {
-                ctx.setHeader('content-type', 'application/json');
-                result = [200, 'OK', JSON.stringify({
-                    code: 0,
-                    msg: 'ok',
-                    result: result || {}
-                })];
-            }
+            return 404;
+        }
 
-            if (_.isObject(result) && !_.isArray(result)) {
-                ctx.setHeader('content-type', 'application/json');
-                if (_.isUndefined(result.code)) {
-                    result = _.assign({
-                        code: 0,
-                        msg: 'ok'
-                    }, {
-                        result: result
-                    });
-                }
+        let ret = await this.pathTree.process(path, method, ctx, skip);
 
-                result = [200, 'OK', JSON.stringify(result)];
-            }
+        /* eslint-disable */
+        switch (ret.type) {
+            case 'redirect':
+                ctx.setUrl(ret.path);
+                return await this.process(ctx, ret.skip);
+            case 'intercept':
+                throw ret.reason;
+            case 'done':
+                return ret.result;
+            default:
+                return 404
+        }
+        /* eslint-enable */
+    }
 
-            let isConform = _.isArray(result) && _.isNumber(result[0]) && _.isString(result[1]) && (_.isBuffer(result[2]) || _.isString(result[2]));
-            if (!isConform) {
-                ctx.setHeader('content-type', 'application/json');
-                result = [200, 'OK', JSON.stringify({
+    _trim(result) {
+        if (_.isNumber(result)) {
+            return [result, http.STATUS_CODES[result], http.STATUS_CODES[result], 'text/plain'];
+        }
+
+        if (!_.isArray(result) && _.isObject(result)) {
+            if (_.isUndefined(result.code)) {
+                result = JSON.stringify({
                     code: 0,
                     msg: 'ok',
                     result: result
-                })];
+                });
             }
 
-            ctx.statusCode = result[0];
-            ctx.statusMessage = result[1];
-            return ctx.end(result[2]);
-        });
+            return [200, 'OK', result, 'application/json'];
+        }
+
+        if (_.isEmpty(result) || _.isString(result)) {
+            result = JSON.stringify({
+                code: 0,
+                msg: 'ok',
+                result: result || {}
+            });
+
+            return [200, 'OK', result, 'application/json'];
+        }
+
+        let normalized = _.isArray(result) &&
+            _.isNumber(result[0]) &&
+            _.isString(result[1]) &&
+            (_.isBuffer(result[2]) || _.isString(result[2]));
+        if (!normalized) {
+            result = JSON.stringify({
+                code: 0,
+                msg: 'ok',
+                result: result
+            });
+
+            return [200, 'OK', result, 'application/json'];
+        }
+
+        return result;
     }
 
     mount(parent, path) {

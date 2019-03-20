@@ -228,29 +228,27 @@ exports = module.exports = class PathTree {
         return this;
     }
 
-    process(path, type, ctx, skip) {
+    async process(path, type, ctx, skip) {
         let nodeList = this.searchFullNodeList(path, skip);
 
-        return Promise.mapSeries(nodeList, item => {
+        return Promise.mapSeries(nodeList, async item => {
             logger.debug(item.name, 'start process');
-            return item.process(type, ctx).then(result => {
-                logger.debug(item.name, 'process result:', result);
 
-                if (result.type !== 'continue') {
-                    return Promise.reject({
-                        isBreak: true,
-                        result: result
-                    });
-                }
+            let ret = await item.process(type, ctx);
+            logger.debug(item.name, 'process result:', ret);
 
-                return Promise.resolve();
-            });
+            if (ret.type !== 'continue') {
+                throw {
+                    isBreak: true,
+                    result: ret
+                };
+            }
         }).catch(err => {
             if (err && err.isBreak) {
-                return Promise.resolve(err.result);
+                return err.result;
             }
 
-            return Promise.reject(err);
+            throw err;
         });
     }
 

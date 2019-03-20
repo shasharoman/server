@@ -13,7 +13,7 @@ exports = module.exports = class Application {
         this.router = new Router();
     }
 
-    setup() {
+    async setup() {
         logger.debug('application setup start');
 
         _.each(this.component.converters, item => {
@@ -29,21 +29,19 @@ exports = module.exports = class Application {
             this.router.interfere(item.path, item.executor, item.methods);
         });
 
-        return Promise.mapSeries(this.modules, item => item.setup()).then((routers) => {
-            _.each(routers, item => {
-                item.mount(this.router);
-            });
-
-            _.each(this.modules, item => {
-                _.each(item.links(), item => {
-                    this.router.link(item.path, item.target);
-                });
-            });
-
-            logger.debug('application setup end');
-
-            return Promise.resolve(this.router);
+        let routers = await Promise.mapSeries(this.modules, item => item.setup());
+        _.each(routers, item => {
+            item.mount(this.router);
         });
+        _.each(this.modules, item => {
+            _.each(item.links(), item => {
+                this.router.link(item.path, item.target);
+            });
+        });
+
+        logger.debug('application setup end');
+
+        return this.router;
     }
 
     existsModule(module) {

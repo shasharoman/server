@@ -60,18 +60,16 @@ class Context extends stream.Duplex {
         return this._res.write.apply(this._res, args);
     }
 
-    start() {
+    async start() {
         if (this.status !== STATUS.INITIALIZED) {
-            return Promise.resolve();
+            return;
         }
 
-        return this.emitHook('pre-start').then(() => {
-            return this._start();
-        }).then(() => {
-            return this.emitHook('post-start');
-        }).then(() => {
-            return Promise.resolve(this);
-        });
+        await this.emitHook('pre-start');
+        this._start();
+        await this.emitHook('post-start');
+
+        return this;
     }
 
     destroy() {}
@@ -100,14 +98,14 @@ class Context extends stream.Duplex {
         return this;
     }
 
-    emitHook(name) {
+    async emitHook(name) {
         let args = Array.prototype.slice.apply(arguments).slice(1);
         let fnItems = this.hooks[name];
         if (_.isEmpty(fnItems)) {
-            return Promise.resolve();
+            return;
         }
 
-        return Promise.each(fnItems, item => {
+        return await Promise.each(fnItems, item => {
             return item.apply(this, [this, ...args]);
         });
     }
@@ -163,18 +161,17 @@ class Context extends stream.Duplex {
         return this.end();
     }
 
-    end() {
+    async end() {
         if (this.finished) {
-            return Promise.resolve();
+            return;
         }
 
         this.status = STATUS.FINISHED;
 
         let args = Array.prototype.slice.call(arguments);
-        return this.emitHook('pre-res-end', ...args).then(() => {
-            this._res.end.apply(this._res, args);
-            return this.emitHook('post-res-end');
-        });
+        await this.emitHook('pre-res-end', ...args);
+        this._res.end.apply(this._res, args);
+        return await this.emitHook('post-res-end');
     }
 
     html(s) {
@@ -185,8 +182,6 @@ class Context extends stream.Duplex {
     _start() {
         this.status = STATUS.SERVICING;
         this.setUrl(this._req.url);
-
-        return Promise.resolve();
     }
 
     _init() {

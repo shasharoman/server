@@ -8,9 +8,9 @@ exports.send = send;
 exports.receive = receive;
 
 // args must be json stringify able
-function send(module, service, args) {
+async function send(module, service, args) {
     if (_.isEmpty(config.rpc) || !config.rpc.key) {
-        return Promise.reject(new Error('no rpc config, ' + [module, service].join(', ')));
+        throw new Error('no rpc config, ' + [module, service].join(', '));
     }
 
     let now = Date.now();
@@ -31,7 +31,8 @@ function send(module, service, args) {
     };
 
     let start = Date.now();
-    return rp(options).then(body => {
+    try {
+        let body = await rp(options);
         let delta = Date.now() - start;
         if (delta > 1000) {
             logger.warn('rpc spend too much time:', delta + 'ms');
@@ -42,23 +43,23 @@ function send(module, service, args) {
         }
 
         if (body.code !== 0) {
-            return Promise.reject(new Error(body.msg));
+            throw new Error(body.msg);
         }
 
         return body.result;
-    }).catch(err => {
+    }
+    catch (err) {
         delete err.response; // this info is too much and useless
-
-        return Promise.reject(err);
-    });
+        throw err;
+    }
 }
 
-function receive(module, service, args, timestamp, sign) {
+async function receive(module, service, args, timestamp, sign) {
     let s = `${module}${service}${timestamp}${config.rpc.key}`;
     let pass = crypto.createHash('md5').update(s).digest('hex') === sign;
     if (!pass || Math.abs(Date.now() - timestamp) > 30000) {
-        return Promise.reject('invalid sign or timestamp');
+        throw new Error('invalid sign or timestamp');
     }
 
-    return fw.serviceCall.apply(fw, [module, service].concat(args));
+    return await fw.serviceCall.apply(fw, [module, service].concat(args));
 }

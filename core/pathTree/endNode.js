@@ -18,35 +18,33 @@ exports = module.exports = class EndNode extends TreeNode {
         return this;
     }
 
-    handle(type, ctx) {
+    async handle(type, ctx) {
         let handler = this.endpoint().handler[type];
 
         if (!_.isFunction(handler)) {
             if (type === 'OPTIONS') {
                 ctx.end(_.keys(this.handler).join(', '));
-                return Promise.resolve();
+                return;
             }
 
-            return Promise.resolve(405);
+            return 405;
         }
 
-        return handler.apply(ctx, [ctx]);
+        return await handler.apply(ctx, [ctx]);
     }
 
-    process(type, ctx) {
-        return super.process(type, ctx).then(result => {
-            if (result.type !== 'continue') {
-                return Promise.resolve(result);
-            }
+    async process(type, ctx) {
+        let ret = await super.process(type, ctx);
+        if (ret.type !== 'continue') {
+            return ret;
+        }
 
-            return this.handle(type, ctx).then(result => {
-                logger.debug(this.name, 'handle result', result);
+        ret = await this.handle(type, ctx);
 
-                return Promise.resolve({
-                    type: 'done',
-                    result: result
-                });
-            });
+        logger.debug(this.name, 'handle result', ret);
+        return Promise.resolve({
+            type: 'done',
+            result: ret
         });
     }
 

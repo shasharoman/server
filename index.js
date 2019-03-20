@@ -16,62 +16,71 @@ if (fs.existsSync(config.utilPath)) {
     process.env.util = config.utilPath;
 }
 
-const logger = require(process.env.lib).logger;
+const lib = require(process.env.lib);
+const logger = lib.logger;
 
-require('./core').bootstrap().then(server => {
-    exports.serviceCall = server.application.serviceCall.bind(server.application);
-    exports.existsModule = server.application.existsModule.bind(server.application);
+(async() => {
+    lib.init && await lib.init();
 
-    process.on('SIGINT', () => {
-        server.close();
+    try {
+        let server = await require('./core').bootstrap();
 
-        setTimeout(() => {
-            process.exit(0);
-        }, 1000);
-    });
+        exports.serviceCall = server.application.serviceCall.bind(server.application);
+        exports.existsModule = server.application.existsModule.bind(server.application);
 
-    server.on('fw-process-error', (err, ctx) => {
-        let isCaptured = _.isArray(err) && (/^\d{6}$/).test(err[0]);
-        if (isCaptured) {
-            logger.warn(err);
-        }
+        process.on('SIGINT', () => {
+            server.close();
 
-        if (!isCaptured && !http.STATUS_CODES[err]) {
-            logger.error(err);
-        }
+            setTimeout(() => {
+                process.exit(0);
+            }, 1000);
+        });
 
-        if (ctx.finished) {
-            return;
-        }
+        server.on('fw-process-error', (err, ctx) => {
+            let isCaptured = _.isArray(err) && (/^\d{6}$/).test(err[0]);
+            if (isCaptured) {
+                logger.warn(err);
+            }
 
-        if (_.isNumber(err) && http.STATUS_CODES[err]) {
-            ctx.setHeader('content-type', 'text/plain');
-            ctx.statusCode = err;
-            ctx.statusMessage = http.STATUS_CODES[err];
-            return ctx.end(ctx.statusMessage);
-        }
+            if (!isCaptured && !http.STATUS_CODES[err]) {
+                logger.error(err);
+            }
 
-        err = _.isArray(err) ? err : [1, err, err];
+            if (ctx.finished) {
+                return;
+            }
 
-        let [code, msg, result] = err;
-        if (_.isUndefined(msg)) {
-            msg = '-';
-        }
-        if (_.isUndefined(result)) {
-            result = msg;
-        }
+            if (_.isNumber(err) && http.STATUS_CODES[err]) {
+                ctx.setHeader('content-type', 'text/plain');
+                ctx.statusCode = err;
+                ctx.statusMessage = http.STATUS_CODES[err];
+                return ctx.end(ctx.statusMessage);
+            }
 
-        ctx.setHeader('content-type', 'application/json');
-        return ctx.end(JSON.stringify({
-            code: code,
-            msg: msg.toString(),
-            result: result instanceof Error ? result.toString() : util.inspect(result, {
-                depth: 1
-            })
-        }));
-    });
-}).catch(err => {
-    logger.error(err);
+            err = _.isArray(err) ? err : [1, err, err];
 
-    process.exit(1);
-});
+            let [code, msg, result] = err;
+            if (_.isUndefined(msg)) {
+                msg = '-';
+            }
+            if (_.isUndefined(result)) {
+                result = msg;
+            }
+
+            ctx.setHeader('content-type', 'application/json');
+
+            return ctx.end(JSON.stringify({
+                code: code,
+                msg: msg.toString(),
+                result: result instanceof Error ? result.toString() : util.inspect(result, {
+                    depth: 1
+                })
+            }));
+        });
+    }
+    catch (err) {
+        logger.error(err);
+
+        process.exit(1);
+    }
+})();

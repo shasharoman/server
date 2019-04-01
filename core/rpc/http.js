@@ -1,21 +1,47 @@
-const rp = require('request-promise');
 const config = require(process.env.config);
 const fw = require(process.env.fw);
-const logger = require(process.env.lib).logger;
 const crypto = require('crypto');
+const rp = require('request-promise');
 
+exports.init = init;
 exports.send = send;
 exports.receive = receive;
 
-// args must be json stringify able
+function init(server) {
+    let path = (config.prefix || '') + '/rpc/module:(.+)/service:(.+)';
+
+    server.makeEnd(path);
+    server.intercept(path, function (ctx) {
+        let module = ctx.params.module[0];
+        if (!fw.existsModule(module)) {
+            return new Error(`service all, ${module} not exists`);
+        }
+
+        return null;
+    }, ['POST']);
+
+    server.post(path, async (ctx) => {
+        let module = ctx.params.module[0];
+        let service = ctx.params.service[0];
+
+        if (!module || !service) {
+            throw new Error('module and service is required.');
+        }
+
+        let timestamp = ctx.headers['x-timestamp'];
+        let sign = ctx.headers['x-sign'];
+
+        return await receive(module, service, ctx.body, timestamp, sign);
+    });
+}
+
 async function send(module, service, args) {
     if (_.isEmpty(config.rpc) || !config.rpc.key) {
         throw new Error('no rpc config, ' + [module, service].join(', '));
     }
 
     let now = Date.now();
-    let s = `${module}${service}${now}${config.rpc.key}`;
-    let sign = crypto.createHash('md5').update(s).digest('hex');
+    let sign = _sign(module, service, now);
 
     let options = {
         url: config.rpc.url + '/rpc/' + encodeURIComponent(module) + '/' + encodeURIComponent(service),
@@ -30,14 +56,8 @@ async function send(module, service, args) {
         encoding: null
     };
 
-    let start = Date.now();
     try {
         let body = await rp(options);
-        let delta = Date.now() - start;
-        if (delta > 1000) {
-            logger.warn('rpc spend too much time:', delta + 'ms');
-        }
-
         if (Buffer.isBuffer(body)) {
             return body;
         }
@@ -55,11 +75,17 @@ async function send(module, service, args) {
 }
 
 async function receive(module, service, args, timestamp, sign) {
-    let s = `${module}${service}${timestamp}${config.rpc.key}`;
-    let pass = crypto.createHash('md5').update(s).digest('hex') === sign;
+    let pass = _sign(module, service, timestamp) === sign;
     if (!pass || Math.abs(Date.now() - timestamp) > 30000) {
         throw new Error('invalid sign or timestamp');
     }
 
     return await fw.serviceCall.apply(fw, [module, service].concat(args));
+}
+
+function _sign(module, service, timestamp) {
+    let s = `${module}${service}${timestamp}${config.rpc.key}`;
+    let sign = crypto.createHash('md5').update(s).digest('hex');
+
+    return sign;
 }

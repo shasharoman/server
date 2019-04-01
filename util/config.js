@@ -35,6 +35,7 @@ function load(path, cover) {
         modules: [],
         component: {},
         appPath: _path(config.path, 'app'),
+        runtimePath: _path(config.path, 'runtime'),
         logPath: _path(config.path, 'log'),
         libPath: _path(config.path, 'lib'),
         utilPath: _path(config.path, 'util'),

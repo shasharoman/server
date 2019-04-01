@@ -5,6 +5,7 @@ const Application = require('./application');
 const config = require('../config');
 const logger = require(process.env.lib).logger;
 const util = require('../util');
+const rpc = require('./rpc');
 
 exports = module.exports = async function () {
     const appOptions = _.pick(config, [
@@ -42,14 +43,9 @@ exports = module.exports = async function () {
     });
 
     server.application = new Application(options);
+    server.appendRouter(await server.application.setup());
+    await rpc.init(server);
 
-    if (config.rpc) {
-        server.registerRpc();
-    }
-
-    let router = await server.application.setup();
-
-    server.appendRouter(router);
     server.listen(appOptions.port, appOptions.host);
 
     logger.debug('bootstrap end');

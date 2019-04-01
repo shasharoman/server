@@ -2,6 +2,7 @@ const PathTree = require('./pathTree');
 const supportMethods = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'];
 const logger = require(process.env.lib).logger;
 const http = require('http');
+const result = require('./result');
 
 exports = module.exports = class Router {
     constructor() {
@@ -156,23 +157,22 @@ exports = module.exports = class Router {
     async process(ctx, skip) {
         await ctx.start();
 
-        let [
-            statusCode,
-            statusMessage,
-            body,
-            contentType
-        ] = this._trim(await this._process(ctx, skip));
-
+        let ret = await this._process(ctx, skip);
         if (ctx.finished) {
             return;
         }
-        if (contentType) {
-            ctx.setHeader('content-type', contentType);
-        }
-        ctx.statusCode = statusCode;
-        ctx.statusMessage = statusMessage;
 
-        return await ctx.end(body);
+        if (!result.canBeNormalized(ret)) {
+            logger.error(ret);
+            throw new Error('result can not be normalized');
+        }
+        ret = result.normalized(ret);
+
+        ctx.statusCode = ret.statusCode;
+        ctx.statusMessage = ret.statusMessage;
+        ctx.setHeader('content-type', ret.contentType);
+
+        return await ctx.end(ret.body);
     }
 
     async _process(ctx, skip) {
@@ -218,50 +218,6 @@ exports = module.exports = class Router {
                 return 404
         }
         /* eslint-enable */
-    }
-
-    _trim(result) {
-        if (_.isNumber(result)) {
-            return [result, http.STATUS_CODES[result], http.STATUS_CODES[result], 'text/plain'];
-        }
-
-        if (!_.isArray(result) && _.isObject(result)) {
-            if (_.isUndefined(result.code)) {
-                result = JSON.stringify({
-                    code: 0,
-                    msg: 'ok',
-                    result: result
-                });
-            }
-
-            return [200, 'OK', result, 'application/json'];
-        }
-
-        if (_.isEmpty(result) || _.isString(result)) {
-            result = JSON.stringify({
-                code: 0,
-                msg: 'ok',
-                result: result || {}
-            });
-
-            return [200, 'OK', result, 'application/json'];
-        }
-
-        let normalized = _.isArray(result) &&
-            _.isNumber(result[0]) &&
-            _.isString(result[1]) &&
-            (_.isBuffer(result[2]) || _.isString(result[2]));
-        if (!normalized) {
-            result = JSON.stringify({
-                code: 0,
-                msg: 'ok',
-                result: result
-            });
-
-            return [200, 'OK', result, 'application/json'];
-        }
-
-        return result;
     }
 
     mount(parent, path) {

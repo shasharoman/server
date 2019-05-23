@@ -1,7 +1,7 @@
 const Router = require('./router');
 const AppModule = require('./module');
 const logger = require(process.env.lib).logger;
-const rpc = require('./rpc');
+const rpc = require('./rpc/index.js');
 
 exports = module.exports = class Application {
     constructor(options) {

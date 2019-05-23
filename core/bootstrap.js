@@ -5,7 +5,7 @@ const Application = require('./application');
 const config = require('../config');
 const logger = require(process.env.lib).logger;
 const util = require('../util');
-const rpc = require('./rpc');
+const rpc = require('./rpc/index.js');
 
 exports = module.exports = async function () {
     const appOptions = _.pick(config, [

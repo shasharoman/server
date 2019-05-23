@@ -1,5 +1,6 @@
 const nUtil = require('util');
 const http = require('http');
+const stream = require('stream');
 
 exports.normalized = normalized;
 exports.canBeNormalized = canBeNormalized;
@@ -18,7 +19,8 @@ class R {
         this.contentType = contentType;
 
         if (!this.contentType) {
-            this.contentType = isStandardized ? 'text/plain' : (_.isBuffer(this.body) ? 'application/octet-stream' : 'application/json');
+            this.isStream = this.body instanceof stream.Readable || _.isFunction(this.body && this.body.pipe);
+            this.contentType = _.isBuffer(this.body) || this.isStream ? 'application/octet-stream' : (isStandardized ? 'text/plain' : 'application/json');
         }
 
         if (this.contentType === 'text/plain') {
@@ -62,6 +64,9 @@ function normalized(o) {
     if (Buffer.isBuffer(o)) {
         return new R(200, 'OK', o);
     }
+    if (o instanceof stream.Readable || _.isFunction(o.pipe)) {
+        return new R(200, 'OK', o);
+    }
 
     throw new Error('normalized exception');
 }
@@ -83,6 +88,9 @@ function canBeNormalized(o) {
         return true;
     }
     if (Buffer.isBuffer(o)) {
+        return true;
+    }
+    if (o instanceof stream.Readable || _.isFunction(o.pipe)) {
         return true;
     }
 

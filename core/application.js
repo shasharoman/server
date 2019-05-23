@@ -48,14 +48,14 @@ exports = module.exports = class Application {
         return !_.isEmpty(_.find(this.modules, item => item.name === module));
     }
 
-    serviceCall(moduleName) {
+    async serviceCall(moduleName) {
         let module = _.find(this.modules, item => item.name === moduleName);
         let args = Array.prototype.slice.call(arguments);
 
         if (_.isEmpty(module)) {
-            return rpc.send(moduleName, args[1], _.slice(args, 2));
+            return await rpc.send(moduleName, args[1], _.slice(args, 2));
         }
 
-        return module.serviceCall.apply(module, _.slice(args, 1));
+        return await module.serviceCall.apply(module, _.slice(args, 1));
     }
 };

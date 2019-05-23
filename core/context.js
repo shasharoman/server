@@ -50,12 +50,10 @@ class Context extends stream.Duplex {
     }
 
     // impl for duplex stream write
-    _write() {
+    _write(...args) {
         if (this.finished) {
             return true;
         }
-
-        let args = Array.prototype.slice.call(arguments);
 
         return this._res.write.apply(this._res, args);
     }
@@ -126,7 +124,7 @@ class Context extends stream.Duplex {
     }
 
     setHeader(name, value, cover) {
-        if (this.finished) {
+        if (this.finished || this.status === STATUS.FINISHED) {
             return;
         }
 
@@ -147,7 +145,7 @@ class Context extends stream.Duplex {
         return this._res.setHeader(name, exists);
     }
 
-    redirect(statusCode, url) {
+    async redirect(statusCode, url) {
         if (_.isUndefined(url)) {
             url = statusCode;
             statusCode = 302;
@@ -158,17 +156,18 @@ class Context extends stream.Duplex {
             'content-type': 'text/plain'
         });
 
-        return this.end();
+        return await this.end();
     }
 
-    async end() {
+    async end(...args) {
         if (this.finished) {
             return;
         }
+        if (this.status === STATUS.FINISHED) {
+            return;
+        }
+        this.status = STATUS.FINISHED; // TODO figure out why _write follow end  
 
-        this.status = STATUS.FINISHED;
-
-        let args = Array.prototype.slice.call(arguments);
         await this.emitHook('pre-res-end', ...args);
         this._res.end.apply(this._res, args);
         return await this.emitHook('post-res-end');
@@ -232,7 +231,7 @@ class Context extends stream.Duplex {
     }
 
     get finished() {
-        return this.status === STATUS.FINISHED || this._res.finished;
+        return this._res.finished;
     }
 }
 

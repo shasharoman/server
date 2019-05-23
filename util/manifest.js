@@ -60,7 +60,7 @@ function load(path, appComponent) {
 
         manifest.child = _.map(manifest.child, item => {
             if (!_.startsWith(item.path, '/')) {
-                item.path = nPath.join(manifest.path, item.path);
+                item.path = [manifest.path, item.path].join('/');
             }
 
             return _load(item);

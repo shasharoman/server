@@ -2,6 +2,7 @@ const PathTree = require('./pathTree');
 const supportMethods = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'];
 const logger = require(process.env.lib).logger;
 const http = require('http');
+const stream = require('stream');
 const result = require('./result');
 
 exports = module.exports = class Router {
@@ -92,7 +93,7 @@ exports = module.exports = class Router {
         interferer = _.isArray(interferer) ? interferer : [interferer];
 
         if (_.some(interferer, item => !_.isFunction(item))) {
-            throw new Error('interferer must bu function.');
+            throw new Error('interferer must be function.');
         }
 
         methods = methods || supportMethods;
@@ -171,6 +172,14 @@ exports = module.exports = class Router {
         ctx.statusCode = ret.statusCode;
         ctx.statusMessage = ret.statusMessage;
         ctx.setHeader('content-type', ret.contentType);
+
+        if (ret.isStream) {
+            ret.body.pipe(ctx);
+
+            return await new Promise(resolve => {
+                ctx.hook('post-res-end', resolve);
+            });
+        }
 
         return await ctx.end(ret.body);
     }

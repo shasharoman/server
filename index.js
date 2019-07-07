@@ -23,7 +23,7 @@ exports.serviceCall = () => {
     throw new Error('serviceCall not ready');
 };
 
-(async () => {
+(async() => {
     lib.init && await lib.init();
 
     try {
@@ -52,7 +52,7 @@ exports.serviceCall = () => {
             ctx.setHeader('content-type', 'application/json');
             return ctx.end(JSON.stringify({
                 code: 1,
-                msg: process.env.mode === 'prod' ? err.toString() : 'system error',
+                msg: process.env.mode !== 'prod' ? err.toString() : 'system error',
                 result: {}
             }));
         });

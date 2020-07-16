@@ -21,7 +21,7 @@
     "@grpc/proto-loader": "0.4.0",
     "bluebird": "3.5.3",
     "grpc": "1.19.0",
-    "lodash": "4.17.11",
+    "lodash": "4.17.19",
     "request": "2.88.0",
     "request-promise": "4.2.2",
     "treeify": "1.1.0"
